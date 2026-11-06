@@ -191,9 +191,10 @@ tasks:
   gitops:validate:
     desc: Render the GitOps manifests
     cmds:
-      - kustomize build {{.GITOPS_CLUSTER_DIR}}/argocd >/dev/null
-      - kustomize build {{.GITOPS_CLUSTER_DIR}}/apps >/dev/null
-      - yq --exit-status '.kind == "Application"' {{.GITOPS_CLUSTER_DIR}}/bootstrap/root.yaml >/dev/null
+      # Route through mise so the task also works when mise is not activated.
+      - mise exec -- kustomize build {{.GITOPS_CLUSTER_DIR}}/argocd >/dev/null
+      - mise exec -- kustomize build {{.GITOPS_CLUSTER_DIR}}/apps >/dev/null
+      - mise exec -- yq --exit-status '.kind == "Application"' {{.GITOPS_CLUSTER_DIR}}/bootstrap/root.yaml >/dev/null
 
   image:build:
     desc: Build the application container image
