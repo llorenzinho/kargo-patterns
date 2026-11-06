@@ -1,0 +1,10 @@
+# Used only by the prod Stage. Never promoted.
+# A commit to this file reaches prod automatically: it skips the prod-gate.
+replicaCount: 2
+
+ingress:
+  hosts:
+    - host: kargo-pattern-prod.localhost
+      paths:
+        - path: /
+          pathType: Prefix

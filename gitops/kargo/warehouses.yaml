@@ -1,0 +1,76 @@
+# Released artifacts and default configuration, promoted together as one Freight
+# through every Stage.
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Warehouse
+metadata:
+  name: app
+  namespace: release-train
+spec:
+  interval: 2m
+  freightCreationPolicy: Automatic
+  subscriptions:
+    - image:
+        repoURL: ghcr.io/llorenzinho/kargo-patterns
+        imageSelectionStrategy: SemVer
+        platform: linux/amd64
+        # Release tags only: never promote sha-* or latest.
+        allowTagsRegexes:
+          - ^v\d+\.\d+\.\d+$
+    - chart:
+        repoURL: oci://ghcr.io/llorenzinho/charts/kargo-pattern
+    - git:
+        repoURL: https://github.com/llorenzinho/kargo-patterns.git
+        branch: main
+        commitSelectionStrategy: NewestFromBranch
+        includePaths:
+          - gitops/configs/demo/app-values/default.yaml
+---
+# Per-environment values. Each Warehouse feeds only its own Stage, so this
+# Freight is never promoted to another environment.
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Warehouse
+metadata:
+  name: values-dev
+  namespace: release-train
+spec:
+  interval: 2m
+  freightCreationPolicy: Automatic
+  subscriptions:
+    - git:
+        repoURL: https://github.com/llorenzinho/kargo-patterns.git
+        branch: main
+        commitSelectionStrategy: NewestFromBranch
+        includePaths:
+          - gitops/configs/demo/app-values/dev.yaml
+---
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Warehouse
+metadata:
+  name: values-staging
+  namespace: release-train
+spec:
+  interval: 2m
+  freightCreationPolicy: Automatic
+  subscriptions:
+    - git:
+        repoURL: https://github.com/llorenzinho/kargo-patterns.git
+        branch: main
+        commitSelectionStrategy: NewestFromBranch
+        includePaths:
+          - gitops/configs/demo/app-values/staging.yaml
+---
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Warehouse
+metadata:
+  name: values-prod
+  namespace: release-train
+spec:
+  interval: 2m
+  freightCreationPolicy: Automatic
+  subscriptions:
+    - git:
+        repoURL: https://github.com/llorenzinho/kargo-patterns.git
+        branch: main
+        commitSelectionStrategy: NewestFromBranch
+        includePaths:
+          - gitops/configs/demo/app-values/prod.yaml

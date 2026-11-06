@@ -1,0 +1,9 @@
+# Used only by the staging Stage. Never promoted.
+replicaCount: 1
+
+ingress:
+  hosts:
+    - host: kargo-pattern-staging.localhost
+      paths:
+        - path: /
+          pathType: Prefix

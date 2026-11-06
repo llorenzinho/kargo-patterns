@@ -1,5 +1,7 @@
 name: chart-publish
 
+# Chart publishing is release-only: called by release-please for chart-v* tags,
+# or dispatched manually with an explicit chart version. Never on branch pushes.
 on:
   workflow_call:
     inputs:

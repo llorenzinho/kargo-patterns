@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: kargo-pattern
+  namespace: argocd
+spec:
+  description: Stages of the kargo-pattern service
+  sourceRepos:
+    - https://github.com/llorenzinho/kargo-patterns.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: dev
+    - server: https://kubernetes.default.svc
+      namespace: staging
+    - server: https://kubernetes.default.svc
+      namespace: prod
+  clusterResourceWhitelist:
+    # Required by the CreateNamespace=true sync option.
+    - group: ""
+      kind: Namespace

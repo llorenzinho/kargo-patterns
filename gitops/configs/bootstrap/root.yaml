@@ -1,0 +1,20 @@
+# App-of-apps entry point. This is the only manifest applied by hand
+# (task argocd:bootstrap); everything else is reconciled from gitops/configs/apps.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/llorenzinho/kargo-patterns.git
+    targetRevision: main
+    path: gitops/configs/apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

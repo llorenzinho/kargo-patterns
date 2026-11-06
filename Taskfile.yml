@@ -1,9 +1,16 @@
 version: "3"
 
+dotenv: [.env]
+
 vars:
   APP_DIR: app
   CHART_DIR: chart
-  IMAGE_REPO: ghcr.io/llorenzinho/kargo-pattern
+  GITOPS_CONFIGS_DIR: gitops/configs
+  GITOPS_KARGO_DIR: gitops/kargo
+  GIT_REPO_URL: https://github.com/llorenzinho/kargo-patterns.git
+  KARGO_NAMESPACE: kargo
+  KARGO_PROJECT: release-train
+  IMAGE_REPO: ghcr.io/llorenzinho/kargo-patterns
   IMAGE_TAG: dev
   CLUSTER_NAME: kargo-pattern
   K8S_NAMESPACE: kargo-pattern
@@ -166,6 +173,131 @@ tasks:
         --wait
         --timeout 5m
 
+  argocd:install:
+    desc: Install or upgrade ArgoCD on the current cluster
+    cmds:
+      # Server-side apply: the ApplicationSet CRD exceeds the client-side limit.
+      - kubectl apply --server-side --force-conflicts -k {{.GITOPS_CONFIGS_DIR}}/argocd
+      - kubectl rollout status deployment/argocd-server --namespace argocd --timeout 5m
+      - kubectl rollout status deployment/argocd-repo-server --namespace argocd --timeout 5m
+      - kubectl rollout status deployment/argocd-applicationset-controller --namespace argocd --timeout 5m
+      - kubectl rollout status statefulset/argocd-application-controller --namespace argocd --timeout 5m
+
+  argocd:bootstrap:
+    desc: Apply the root Application (reads gitops/configs/apps from origin/main)
+    cmds:
+      - kubectl apply -f {{.GITOPS_CONFIGS_DIR}}/bootstrap/root.yaml
+
+  argocd:password:
+    desc: Print the initial ArgoCD admin password
+    silent: true
+    cmds:
+      - kubectl get secret argocd-initial-admin-secret --namespace argocd --output jsonpath='{.data.password}' | base64 --decode
+
+  kargo:admin:
+    desc: Create the Kargo admin credentials once, outside Git
+    silent: true
+    cmds:
+      - kubectl create namespace {{.KARGO_NAMESPACE}} --dry-run=client --output yaml | kubectl apply --filename - >/dev/null
+      - |
+        set -eu
+        if kubectl get secret kargo-admin-credentials --namespace {{.KARGO_NAMESPACE}} >/dev/null 2>&1; then
+          exit 0
+        fi
+        password="$(openssl rand -base64 48 | tr -d '=+/' | head -c 24)"
+        signing_key="$(openssl rand -base64 48 | tr -d '=+/' | head -c 32)"
+        password_hash="$(printf '%s' "$password" | mise exec -- kargo hash-password --password-stdin)"
+        kubectl create secret generic kargo-api-admin --namespace {{.KARGO_NAMESPACE}} \
+          --from-literal=ADMIN_ACCOUNT_PASSWORD_HASH="$password_hash" \
+          --from-literal=ADMIN_ACCOUNT_TOKEN_SIGNING_KEY="$signing_key" \
+          --dry-run=client --output yaml | kubectl apply --filename - >/dev/null
+        # Written last: its presence marks the admin credentials as complete.
+        kubectl create secret generic kargo-admin-credentials --namespace {{.KARGO_NAMESPACE}} \
+          --from-literal=password="$password" \
+          --dry-run=client --output yaml | kubectl apply --filename - >/dev/null
+
+  kargo:password:
+    desc: Print the Kargo admin password
+    silent: true
+    cmds:
+      - kubectl get secret kargo-admin-credentials --namespace {{.KARGO_NAMESPACE}} --output jsonpath='{.data.password}' | base64 --decode
+
+  kargo:git-credentials:
+    desc: Give Kargo the token it uses to push the deploy/app/* branches
+    silent: true
+    preconditions:
+      - sh: test -n "${KARGO_GIT_USERNAME:-}" && test -n "${KARGO_GIT_TOKEN:-}"
+        msg: Set KARGO_GIT_USERNAME and KARGO_GIT_TOKEN in .env (see .env.example)
+    cmds:
+      - timeout 600 sh -c 'until kubectl get namespace {{.KARGO_PROJECT}} >/dev/null 2>&1; do sleep 5; done'
+      - |
+        set -eu
+        kubectl create secret generic git-credentials --namespace {{.KARGO_PROJECT}} \
+          --from-literal=repoURL={{.GIT_REPO_URL}} \
+          --from-literal=username="$KARGO_GIT_USERNAME" \
+          --from-literal=password="$KARGO_GIT_TOKEN" \
+          --dry-run=client --output yaml \
+          | kubectl label --local --filename - kargo.akuity.io/cred-type=git --output yaml \
+          | kubectl apply --filename - >/dev/null
+
+  kargo:wait:
+    desc: Wait for the ArgoCD-managed Kargo installation
+    cmds:
+      - timeout 300 sh -c 'until kubectl get application kargo --namespace argocd >/dev/null 2>&1; do sleep 5; done'
+      - kubectl wait application/kargo --namespace argocd --for=jsonpath='{.status.health.status}'=Healthy --timeout 15m
+      - kubectl rollout status deployment/kargo-api --namespace {{.KARGO_NAMESPACE}} --timeout 5m
+
+  gitops:validate:
+    desc: Render the GitOps manifests
+    cmds:
+      # Route through mise so the task also works when mise is not activated.
+      - mise exec -- kustomize build {{.GITOPS_CONFIGS_DIR}}/argocd >/dev/null
+      - mise exec -- kustomize build {{.GITOPS_CONFIGS_DIR}}/apps >/dev/null
+      - mise exec -- kustomize build {{.GITOPS_KARGO_DIR}} >/dev/null
+      - mise exec -- yq --exit-status '.kind == "Application"' {{.GITOPS_CONFIGS_DIR}}/bootstrap/root.yaml >/dev/null
+
+  up:
+    desc: Run the whole solution on kind and print URLs and credentials
+    preconditions:
+      - sh: test -n "${KARGO_GIT_USERNAME:-}" && test -n "${KARGO_GIT_TOKEN:-}"
+        msg: Set KARGO_GIT_USERNAME and KARGO_GIT_TOKEN in .env (see .env.example)
+      # ArgoCD and Kargo read from GitHub, not from the working tree.
+      - sh: git fetch --quiet origin main && git cat-file -e origin/main:{{.GITOPS_KARGO_DIR}}/kustomization.yaml
+        msg: "{{.GITOPS_KARGO_DIR}} is not on origin/main yet: commit and push it first"
+    cmds:
+      - task: cluster:create
+      - task: ingress:install
+      - task: argocd:install
+      - task: kargo:admin
+      - task: argocd:bootstrap
+      - task: kargo:wait
+      - task: kargo:git-credentials
+      - task: up:info
+
+  up:info:
+    desc: Print URLs and credentials of ArgoCD, Kargo and the three stages
+    silent: true
+    cmds:
+      - |
+        set -eu
+        argocd_password="$(kubectl get secret argocd-initial-admin-secret --namespace argocd --output jsonpath='{.data.password}' | base64 --decode)"
+        kargo_password="$(kubectl get secret kargo-admin-credentials --namespace {{.KARGO_NAMESPACE}} --output jsonpath='{.data.password}' | base64 --decode)"
+        cat <<EOF
+
+        ArgoCD  http://argocd.localhost:{{.LOCAL_HTTP_PORT}}
+                user: admin
+                password: $argocd_password
+
+        Kargo   http://kargo.localhost:{{.LOCAL_HTTP_PORT}}
+                user: admin
+                password: $kargo_password
+
+        Stages  http://kargo-pattern-dev.localhost:{{.LOCAL_HTTP_PORT}}
+                http://kargo-pattern-staging.localhost:{{.LOCAL_HTTP_PORT}}
+                http://kargo-pattern-prod.localhost:{{.LOCAL_HTTP_PORT}}
+
+        EOF
+
   image:build:
     desc: Build the application container image
     cmds:
@@ -203,6 +335,7 @@ tasks:
       - task: app:check
       - task: chart:lint
       - task: chart:template
+      - task: gitops:validate
       - mise exec -- actionlint
 
   clean:

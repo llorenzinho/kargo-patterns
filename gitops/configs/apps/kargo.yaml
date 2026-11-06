@@ -1,0 +1,57 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kargo
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  project: default
+  source:
+    repoURL: ghcr.io/akuity/kargo-charts
+    chart: kargo
+    # Keep in sync with the Kargo CLI version pinned in mise.toml.
+    targetRevision: 1.12.5
+    helm:
+      valuesObject:
+        api:
+          # Includes the port so that generated URLs match the kind port mapping.
+          # The chart would copy it into its Ingress host, which is invalid, so
+          # the Ingress lives in kargo-ingress.yaml instead.
+          host: kargo.localhost:8080
+          # Created by task kargo:admin: no credentials in Git.
+          secret:
+            name: kargo-api-admin
+          # Local kind only: ingress-nginx serves plain HTTP.
+          tls:
+            enabled: false
+          argocd:
+            urls:
+              "": http://argocd.localhost:8080
+          # Verification relies on Application health: no AnalysisTemplates.
+          rollouts:
+            integrationEnabled: false
+        controller:
+          rollouts:
+            integrationEnabled: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kargo
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # The Kargo CRDs are too large for client-side apply.
+      - ServerSideApply=true
+      # The chart uses cert-manager CRDs, which may not exist yet.
+      - SkipDryRunOnMissingResource=true
+    # ArgoCD does not wait for the health of sibling Applications: retry until
+    # cert-manager is ready.
+    retry:
+      limit: 20
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 3m

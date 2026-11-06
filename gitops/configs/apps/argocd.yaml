@@ -1,0 +1,23 @@
+# ArgoCD manages itself from the same directory used by task argocd:install.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/llorenzinho/kargo-patterns.git
+    targetRevision: main
+    path: gitops/configs/argocd
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      # Never prune ArgoCD's own resources automatically.
+      prune: false
+      selfHeal: true
+    syncOptions:
+      # The ApplicationSet CRD is too large for client-side apply.
+      - ServerSideApply=true

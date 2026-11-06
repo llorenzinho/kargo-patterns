@@ -1,0 +1,114 @@
+# dev -> staging-gate -> staging -> prod-gate -> prod
+#
+# Every regular Stage has two Freight requests: "app" travels through the
+# pipeline, "values-<stage>" comes straight from its own Warehouse and goes no
+# further. See promotion-task.yaml for what happens while one of them is empty.
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Stage
+metadata:
+  name: dev
+  namespace: release-train
+spec:
+  requestedFreight:
+    - origin:
+        kind: Warehouse
+        name: app
+      sources:
+        direct: true
+    - origin:
+        kind: Warehouse
+        name: values-dev
+      sources:
+        direct: true
+  promotionTemplate:
+    spec:
+      steps:
+        - task:
+            name: render-and-push
+---
+# Control flow Stage: no promotion process. Every Freight verified in dev is
+# immediately verified here, so the gate collects them for a manual promotion.
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Stage
+metadata:
+  name: staging-gate
+  namespace: release-train
+spec:
+  requestedFreight:
+    - origin:
+        kind: Warehouse
+        name: app
+      sources:
+        stages:
+          - dev
+---
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Stage
+metadata:
+  name: staging
+  namespace: release-train
+spec:
+  requestedFreight:
+    - origin:
+        kind: Warehouse
+        name: app
+      sources:
+        stages:
+          - staging-gate
+        # Keeps this request manual although auto-promotion is enabled on the
+        # Stage for values-staging: MatchUpstream only selects Freight currently
+        # in the upstream Stage, and a control flow Stage never holds any.
+        autoPromotionOptions:
+          selectionPolicy: MatchUpstream
+    - origin:
+        kind: Warehouse
+        name: values-staging
+      sources:
+        direct: true
+  promotionTemplate:
+    spec:
+      steps:
+        - task:
+            name: render-and-push
+---
+# Control flow Stage: collects every Freight verified in staging.
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Stage
+metadata:
+  name: prod-gate
+  namespace: release-train
+spec:
+  requestedFreight:
+    - origin:
+        kind: Warehouse
+        name: app
+      sources:
+        stages:
+          - staging
+---
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Stage
+metadata:
+  name: prod
+  namespace: release-train
+spec:
+  requestedFreight:
+    - origin:
+        kind: Warehouse
+        name: app
+      sources:
+        stages:
+          - prod-gate
+        # Keeps this request manual: see the staging Stage.
+        autoPromotionOptions:
+          selectionPolicy: MatchUpstream
+    - origin:
+        kind: Warehouse
+        name: values-prod
+      sources:
+        direct: true
+  promotionTemplate:
+    spec:
+      steps:
+        - task:
+            name: render-and-push
