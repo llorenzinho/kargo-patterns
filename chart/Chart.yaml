@@ -1,0 +1,12 @@
+apiVersion: v2
+name: kargo-pattern
+description: Reference Go service for the Kargo promotion pipeline showcase.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.27.0-0"
+home: https://github.com/llorenzinho/kargo-pattern
+sources:
+  - https://github.com/llorenzinho/kargo-pattern
+maintainers:
+  - name: llorenzinho

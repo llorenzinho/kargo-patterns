@@ -1,0 +1,9 @@
+{{- if .Values.ingress.enabled }}
+The application is available at:
+{{- range .Values.ingress.hosts }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}{{ range .paths }}{{ .path }}{{ end }}
+{{- end }}
+{{- else }}
+Access the application with:
+  kubectl port-forward svc/{{ include "kargo-pattern.fullname" . }} 8080:{{ .Values.service.port }}
+{{- end }}
