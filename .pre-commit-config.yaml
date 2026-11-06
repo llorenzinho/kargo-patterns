@@ -1,0 +1,49 @@
+default_stages: [pre-commit]
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+        exclude: ^chart/templates/
+      - id: check-added-large-files
+      - id: detect-private-key
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.5.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args: [feat, fix, chore, docs, refactor, test, build, ci, perf, revert]
+
+  - repo: local
+    hooks:
+      - id: gofmt
+        name: gofmt
+        entry: bash -c 'cd app && gofmt -w .'
+        language: system
+        files: ^app/.*\.go$
+        pass_filenames: false
+      - id: go-vet
+        name: go vet
+        entry: bash -c 'cd app && go vet ./...'
+        language: system
+        files: ^app/.*\.go$
+        pass_filenames: false
+      - id: golangci-lint
+        name: golangci-lint
+        entry: bash -c 'cd app && mise exec -- golangci-lint run ./...'
+        language: system
+        files: ^app/.*\.go$
+        pass_filenames: false
+      - id: helm-lint
+        name: helm lint
+        entry: helm lint chart
+        language: system
+        files: ^chart/
+        pass_filenames: false
