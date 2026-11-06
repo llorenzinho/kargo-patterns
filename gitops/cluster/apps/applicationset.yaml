@@ -1,0 +1,41 @@
+# One Application per stage. Each one deploys the rendered manifests that Kargo
+# commits to the root of the deploy/app/<stage> branch.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: kargo-pattern
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  syncPolicy:
+    # Removing the ApplicationSet must not delete the running workloads.
+    preserveResourcesOnDeletion: true
+  generators:
+    - list:
+        elements:
+          - stage: dev
+          - stage: staging
+          - stage: prod
+  template:
+    metadata:
+      name: "kargo-pattern-{{ .stage }}"
+      labels:
+        stage: "{{ .stage }}"
+    spec:
+      project: kargo-pattern
+      source:
+        repoURL: https://github.com/llorenzinho/kargo-patterns.git
+        targetRevision: "deploy/app/{{ .stage }}"
+        path: .
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "{{ .stage }}"
+      syncPolicy:
+        # Auto-sync on every stage, prod included: these branches change only
+        # through a Kargo promotion, so the prod gate belongs to the Kargo Stage.
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

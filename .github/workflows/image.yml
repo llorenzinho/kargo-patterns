@@ -17,14 +17,15 @@ on:
         required: false
         type: boolean
         default: true
+  # Publish on release tags only. Pushes to main build the image in ci.yml
+  # (push: false) but must never publish it.
   push:
-    branches: [main]
     tags: ["v*"]
   workflow_dispatch:
     inputs:
       version:
-        description: Image version (defaults to sha-<short>)
-        required: false
+        description: Release tag to publish, for example v0.2.0
+        required: true
         type: string
 
 permissions:

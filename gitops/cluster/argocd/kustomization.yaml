@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: argocd
+
+resources:
+  - namespace.yaml
+  # Keep in sync with the argocd CLI version pinned in mise.toml.
+  - https://raw.githubusercontent.com/argoproj/argo-cd/v3.6.1/manifests/install.yaml
+  - ingress.yaml
+
+patches:
+  # Local kind only: ingress-nginx terminates plain HTTP, so argocd-server must
+  # not redirect to its own TLS endpoint. Do not reuse on a real cluster.
+  - target:
+      version: v1
+      kind: ConfigMap
+      name: argocd-cmd-params-cm
+    patch: |-
+      apiVersion: v1
+      kind: ConfigMap
+      metadata:
+        name: argocd-cmd-params-cm
+      data:
+        server.insecure: "true"

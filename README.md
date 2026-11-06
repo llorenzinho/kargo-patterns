@@ -10,10 +10,11 @@ The repository contains:
 
 - `app/`: a small Go HTTP service with structured JSON logs
 - `chart/`: a Helm chart for the service
+- `gitops/cluster/`: ArgoCD installation and the ApplicationSet that deploys the
+  service to the `dev`, `staging` and `prod` namespaces
 - `gitops/kargo/`: scaffold for the Kargo promotion pattern
-- `gitops/cluster/`: scaffold for the ArgoCD ApplicationSet bootstrap
 
-Kargo and ArgoCD are intentionally not implemented yet.
+Kargo is not implemented yet.
 
 ## Service
 
@@ -155,10 +156,36 @@ fine-grained personal access token with `contents: write` and
 `pull-requests: write` permissions and store it as the `RELEASE_PLEASE_TOKEN`
 repository secret.
 
-## GitOps roadmap
+## GitOps
 
-- `gitops/cluster/`: ArgoCD ApplicationSet bootstrap
-- `gitops/kargo/`: Kargo Project, Warehouse, Stages and PromotionTasks
+ArgoCD deploys one Application per stage with an `ApplicationSet`. Each one reads
+rendered manifests from its `deploy/app/<stage>` branch:
 
-The Kargo Warehouse will watch the image repository, and each Stage will
-promote the image tag through the GitOps desired state.
+| Application | Branch | Namespace |
+|---|---|---|
+| `kargo-pattern-dev` | `deploy/app/dev` | `dev` |
+| `kargo-pattern-staging` | `deploy/app/staging` | `staging` |
+| `kargo-pattern-prod` | `deploy/app/prod` | `prod` |
+
+Install ArgoCD on the current cluster and start the app-of-apps. ArgoCD reads
+from GitHub, so `gitops/cluster/` must be on `origin/main` first:
+
+```sh
+task argocd:install
+task argocd:bootstrap
+```
+
+The UI is at <http://argocd.localhost:8080> once ingress-nginx is installed. Log
+in as `admin` with the password from `task argocd:password`. `task e2e` does not
+install ArgoCD.
+
+Kargo will create the `deploy/app/<stage>` branches. Until then the stage
+Applications report a `ComparisonError` because the revision does not exist. See
+[`gitops/cluster/README.md`](gitops/cluster/README.md).
+
+### Roadmap
+
+`gitops/kargo/` will hold the Kargo Project, Warehouse, Stages and PromotionTasks.
+The Warehouse will watch the image repository, and each Stage will promote the
+image tag by committing rendered manifests to its branch. See
+[`gitops/kargo/README.md`](gitops/kargo/README.md).

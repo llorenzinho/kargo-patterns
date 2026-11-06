@@ -3,6 +3,7 @@ version: "3"
 vars:
   APP_DIR: app
   CHART_DIR: chart
+  GITOPS_CLUSTER_DIR: gitops/cluster
   IMAGE_REPO: ghcr.io/llorenzinho/kargo-patterns
   IMAGE_TAG: dev
   CLUSTER_NAME: kargo-pattern
@@ -166,6 +167,34 @@ tasks:
         --wait
         --timeout 5m
 
+  argocd:install:
+    desc: Install or upgrade ArgoCD on the current cluster
+    cmds:
+      # Server-side apply: the ApplicationSet CRD exceeds the client-side limit.
+      - kubectl apply --server-side --force-conflicts -k {{.GITOPS_CLUSTER_DIR}}/argocd
+      - kubectl rollout status deployment/argocd-server --namespace argocd --timeout 5m
+      - kubectl rollout status deployment/argocd-repo-server --namespace argocd --timeout 5m
+      - kubectl rollout status deployment/argocd-applicationset-controller --namespace argocd --timeout 5m
+      - kubectl rollout status statefulset/argocd-application-controller --namespace argocd --timeout 5m
+
+  argocd:bootstrap:
+    desc: Apply the root Application (reads gitops/cluster/apps from origin/main)
+    cmds:
+      - kubectl apply -f {{.GITOPS_CLUSTER_DIR}}/bootstrap/root.yaml
+
+  argocd:password:
+    desc: Print the initial ArgoCD admin password
+    silent: true
+    cmds:
+      - kubectl get secret argocd-initial-admin-secret --namespace argocd --output jsonpath='{.data.password}' | base64 --decode
+
+  gitops:validate:
+    desc: Render the GitOps manifests
+    cmds:
+      - kustomize build {{.GITOPS_CLUSTER_DIR}}/argocd >/dev/null
+      - kustomize build {{.GITOPS_CLUSTER_DIR}}/apps >/dev/null
+      - yq --exit-status '.kind == "Application"' {{.GITOPS_CLUSTER_DIR}}/bootstrap/root.yaml >/dev/null
+
   image:build:
     desc: Build the application container image
     cmds:
@@ -203,6 +232,7 @@ tasks:
       - task: app:check
       - task: chart:lint
       - task: chart:template
+      - task: gitops:validate
       - mise exec -- actionlint
 
   clean:
