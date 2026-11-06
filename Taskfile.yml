@@ -1,0 +1,211 @@
+version: "3"
+
+vars:
+  APP_DIR: app
+  CHART_DIR: chart
+  IMAGE_REPO: ghcr.io/llorenzinho/kargo-pattern
+  IMAGE_TAG: dev
+  CLUSTER_NAME: kargo-pattern
+  K8S_NAMESPACE: kargo-pattern
+  RELEASE_NAME: kargo-pattern
+  INGRESS_HOST: kargo-pattern.localhost
+  LOCAL_HTTP_PORT: "8080"
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - task --list
+
+  setup:
+    desc: Install mise tools, create .env and install git hooks
+    cmds:
+      - mise trust
+      - mise install
+      - cmd: test -f .env || cp .env.example .env
+        silent: true
+      - pre-commit install --install-hooks -t pre-commit -t commit-msg
+
+  doctor:
+    desc: Check the local prerequisites
+    cmds:
+      - mise --version
+      - go version
+      - kind version
+      - kubectl version --client
+      - helm version
+      - task --version
+      - docker info >/dev/null
+      - echo "Docker daemon OK"
+
+  app:fmt:
+    desc: Format the Go code
+    dir: "{{.APP_DIR}}"
+    cmds:
+      - gofmt -w .
+
+  app:fmt:check:
+    desc: Check Go formatting
+    dir: "{{.APP_DIR}}"
+    cmds:
+      - test -z "$(gofmt -l .)"
+
+  app:vet:
+    desc: Run go vet
+    dir: "{{.APP_DIR}}"
+    cmds:
+      - go vet ./...
+
+  app:lint:
+    desc: Run golangci-lint
+    dir: "{{.APP_DIR}}"
+    cmds:
+      # Always use the mise-pinned v2 binary: a global v1 in PATH rejects the
+      # v2 config in .golangci.yml.
+      - mise exec -- golangci-lint run ./...
+
+  app:test:
+    desc: Run the unit tests
+    dir: "{{.APP_DIR}}"
+    cmds:
+      - go test -race ./...
+
+  app:build:
+    desc: Build the Go packages
+    dir: "{{.APP_DIR}}"
+    cmds:
+      - go build ./...
+
+  app:run:
+    desc: Run the HTTP server locally
+    dir: "{{.APP_DIR}}"
+    cmds:
+      - go run ./cmd/server
+
+  app:tidy:
+    desc: Tidy the Go module
+    dir: "{{.APP_DIR}}"
+    cmds:
+      - go mod tidy
+
+  app:check:
+    desc: Format, vet, lint, test and build the app
+    cmds:
+      - task: app:fmt:check
+      - task: app:vet
+      - task: app:lint
+      - task: app:test
+      - task: app:build
+
+  chart:lint:
+    desc: Lint the Helm chart
+    cmds:
+      - helm lint {{.CHART_DIR}}
+
+  chart:template:
+    desc: Render the Helm chart
+    cmds:
+      - helm template {{.RELEASE_NAME}} {{.CHART_DIR}} --namespace {{.K8S_NAMESPACE}} --set image.tag=test
+
+  chart:package:
+    desc: Package the Helm chart
+    cmds:
+      - helm package {{.CHART_DIR}} --destination dist
+
+  chart:install:
+    desc: Install or upgrade the chart on the current cluster
+    cmds:
+      - >-
+        helm upgrade --install {{.RELEASE_NAME}} {{.CHART_DIR}}
+        --namespace {{.K8S_NAMESPACE}}
+        --create-namespace
+        --set image.repository={{.IMAGE_REPO}}
+        --set image.tag={{.IMAGE_TAG}}
+        --set-json 'ingress.hosts=[{"host":"{{.INGRESS_HOST}}","paths":[{"path":"/","pathType":"Prefix"}]}]'
+        --wait
+        --timeout 3m
+
+  chart:uninstall:
+    desc: Remove the chart from the current cluster
+    cmds:
+      - helm uninstall {{.RELEASE_NAME}} --namespace {{.K8S_NAMESPACE}} --ignore-not-found
+
+  cluster:create:
+    desc: Create the local kind cluster
+    cmds:
+      - kind get clusters | grep -qx "{{.CLUSTER_NAME}}" || kind create cluster --name {{.CLUSTER_NAME}} --config hack/kind-config.yaml
+      - task: cluster:tune
+
+  cluster:tune:
+    desc: Raise inotify limits so kube-proxy can start on low-limit hosts
+    cmds:
+      # These /proc/sys values are host-wide, not namespaced. The default
+      # fs.inotify.max_user_instances=128 makes kube-proxy crash with
+      # "fsnotify watcher init: too many open files" in kind nodes.
+      - >-
+        docker exec --privileged {{.CLUSTER_NAME}}-control-plane
+        sysctl -w fs.inotify.max_user_instances=1024 fs.inotify.max_user_watches=524288 >/dev/null
+
+  cluster:delete:
+    desc: Delete the local kind cluster
+    cmds:
+      - kind delete cluster --name {{.CLUSTER_NAME}}
+
+  ingress:install:
+    desc: Install ingress-nginx in the kind cluster
+    cmds:
+      - >-
+        helm upgrade --install ingress-nginx ingress-nginx
+        --repo https://kubernetes.github.io/ingress-nginx
+        --namespace ingress-nginx
+        --create-namespace
+        --set controller.service.type=NodePort
+        --set controller.service.nodePorts.http=30080
+        --set controller.service.nodePorts.https=30443
+        --set controller.hostPort.enabled=true
+        --wait
+        --timeout 5m
+
+  image:build:
+    desc: Build the application container image
+    cmds:
+      - >-
+        docker build
+        --build-arg VERSION={{.IMAGE_TAG}}
+        --build-arg COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo dev)
+        -t {{.IMAGE_REPO}}:{{.IMAGE_TAG}}
+        {{.APP_DIR}}
+
+  image:load:
+    desc: Load the image into the kind cluster
+    cmds:
+      - kind load docker-image {{.IMAGE_REPO}}:{{.IMAGE_TAG}} --name {{.CLUSTER_NAME}}
+
+  image:push:
+    desc: Push the image to its registry
+    cmds:
+      - docker push {{.IMAGE_REPO}}:{{.IMAGE_TAG}}
+
+  e2e:
+    desc: Create kind, build/load the image and install the chart
+    cmds:
+      - task: cluster:create
+      - task: image:build
+      - task: image:load
+      - task: ingress:install
+      - task: chart:install
+      - kubectl rollout status deployment/{{.RELEASE_NAME}} --namespace {{.K8S_NAMESPACE}} --timeout 120s
+      - curl --fail --silent --show-error --retry 10 --retry-delay 3 http://{{.INGRESS_HOST}}:{{.LOCAL_HTTP_PORT}}/version
+
+  ci:
+    desc: Run all local checks used by GitHub Actions
+    cmds:
+      - task: app:check
+      - task: chart:lint
+      - task: chart:template
+      - mise exec -- actionlint
+
+  clean:
+    desc: Remove build artifacts
+    cmds:
+      - rm -rf dist app/bin coverage.out

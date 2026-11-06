@@ -1,0 +1,14 @@
+# Build artifacts
+bin/
+dist/
+*.tgz
+coverage.out
+*.test
+
+# Local configuration
+.env
+
+# Editors and OS files
+.DS_Store
+.idea/
+.vscode/

@@ -1,0 +1,51 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install tools from mise.toml
+        uses: jdx/mise-action@v3
+        with:
+          install: true
+          cache: true
+
+      - name: Install git hooks
+        run: pre-commit install --install-hooks -t pre-commit -t commit-msg
+
+      - name: Pre-commit
+        run: pre-commit run --all-files --show-diff-on-failure
+
+      - name: Repository checks
+        run: task ci
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build container image
+        uses: docker/build-push-action@v6
+        with:
+          context: app
+          file: app/Dockerfile
+          push: false
+          build-args: |
+            VERSION=ci
+            COMMIT=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
