@@ -5,10 +5,10 @@ Project `release-train`. ArgoCD applies this directory through the `kargo-projec
 Application.
 
 This directory holds only the pipeline. The application configuration it promotes
-lives in [`../configs/demo/app-values/`](../configs/demo/app-values/).
+lives in [`../configs/demo-app-values/`](../configs/demo-app-values/).
 
 ```
-          app Warehouse: image + chart + demo/app-values/default.yaml
+          app Warehouse: image + chart + demo-app-values/default.yaml
                                   |
                                   v
 dev -> staging-gate -> staging -> prod-gate -> prod
@@ -33,10 +33,10 @@ manual promotion. No `Promotion` runs for a gate.
 ## Warehouses
 
 - `app`: the released image (`vX.Y.Z` tags only), the released chart and
-  `gitops/configs/demo/app-values/default.yaml`. They produce one Freight and travel together
+  `gitops/configs/demo-app-values/default.yaml`. They produce one Freight and travel together
   through every Stage.
 - `values-dev`, `values-staging`, `values-prod`: each watches one file in
-  `gitops/configs/demo/app-values/` and feeds one Stage only, so environment values are never
+  `gitops/configs/demo-app-values/` and feeds one Stage only, so environment values are never
   promoted.
 
 A Warehouse needs a release to produce `app` Freight: until the image and the chart
@@ -48,8 +48,8 @@ are published, it reports an error for the missing artifact.
 precedence first:
 
 1. the defaults in the chart
-2. `gitops/configs/demo/app-values/default.yaml`, at the commit pinned in the `app` Freight
-3. `gitops/configs/demo/app-values/<stage>.yaml`, at the commit pinned in the `values-<stage>`
+2. `gitops/configs/demo-app-values/default.yaml`, at the commit pinned in the `app` Freight
+3. `gitops/configs/demo-app-values/<stage>.yaml`, at the commit pinned in the `values-<stage>`
    Freight
 4. `image.tag` from the `app` Freight
 
@@ -85,7 +85,7 @@ Freight currently in the upstream Stage, and a gate never holds any. As a result
 records an auto-promotion hold on the `app` request. The hold is harmless and does not
 affect the values Freight.
 
-**A commit to `gitops/configs/demo/app-values/prod.yaml` reaches prod automatically**, without
+**A commit to `gitops/configs/demo-app-values/prod.yaml` reaches prod automatically**, without
 passing the `prod-gate`. Treat that file like a production change.
 
 **The first Freight on a Stage does not deploy anything.** A Stage renders only when

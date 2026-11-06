@@ -229,9 +229,12 @@ tasks:
       - sh: test -n "${KARGO_GIT_USERNAME:-}" && test -n "${KARGO_GIT_TOKEN:-}"
         msg: Set KARGO_GIT_USERNAME and KARGO_GIT_TOKEN in .env (see .env.example)
     cmds:
-      - timeout 600 sh -c 'until kubectl get namespace {{.KARGO_PROJECT}} >/dev/null 2>&1; do sleep 5; done'
       - |
         set -eu
+        # The label lets the Kargo Project adopt this namespace later.
+        kubectl create namespace {{.KARGO_PROJECT}} --dry-run=client --output yaml \
+          | kubectl label --local --filename - kargo.akuity.io/project=true --output yaml \
+          | kubectl apply --filename - >/dev/null
         kubectl create secret generic git-credentials --namespace {{.KARGO_PROJECT}} \
           --from-literal=repoURL={{.GIT_REPO_URL}} \
           --from-literal=username="$KARGO_GIT_USERNAME" \
@@ -269,9 +272,11 @@ tasks:
       - task: ingress:install
       - task: argocd:install
       - task: kargo:admin
+      # Before the bootstrap: the first render can start as soon as the pipeline
+      # syncs, and Kargo does not retry an auto-promotion that failed to push.
+      - task: kargo:git-credentials
       - task: argocd:bootstrap
       - task: kargo:wait
-      - task: kargo:git-credentials
       - task: up:info
 
   up:info:

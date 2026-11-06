@@ -7,10 +7,10 @@ the `kargo-pattern` service in the `dev`, `staging` and `prod` namespaces.
 argocd/      ArgoCD itself: upstream install.yaml pinned to a tag, plus local patches
 bootstrap/   root Application (app-of-apps), the only manifest applied by hand
 apps/        reconciled by root: everything else
-demo/app-values/      application configuration: default.yaml, dev.yaml, staging.yaml, prod.yaml
+demo-app-values/      application configuration: default.yaml, dev.yaml, staging.yaml, prod.yaml
 ```
 
-`demo/app-values/` is not applied to the cluster. Kargo Warehouses watch these files and each
+`demo-app-values/` is not applied to the cluster. Kargo Warehouses watch these files and each
 promotion renders the chart with them: `default.yaml` is promoted with the image and the
 chart, while each `<stage>.yaml` is used only by its own Stage. See
 [`../kargo/README.md`](../kargo/README.md).
@@ -45,9 +45,9 @@ task cluster:create
 task ingress:install
 task argocd:install
 task kargo:admin
+task kargo:git-credentials
 task argocd:bootstrap
 task kargo:wait
-task kargo:git-credentials
 task up:info
 ```
 
@@ -58,7 +58,8 @@ Secrets stay out of Git:
 - `kargo:admin` generates the Kargo admin password on the first run and stores it in
   the `kargo-admin-credentials` Secret.
 - `kargo:git-credentials` stores `KARGO_GIT_USERNAME` and `KARGO_GIT_TOKEN` from `.env`
-  in the `release-train` namespace.
+  in the `release-train` namespace. It runs before the bootstrap: Kargo does not retry
+  an auto-promotion that failed to push.
 
 `server.insecure` on ArgoCD and `api.tls.enabled: false` on Kargo exist because
 ingress-nginx serves plain HTTP on kind. They are for local use only: put TLS in front

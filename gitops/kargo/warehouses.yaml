@@ -23,7 +23,7 @@ spec:
         branch: main
         commitSelectionStrategy: NewestFromBranch
         includePaths:
-          - gitops/configs/demo/app-values/default.yaml
+          - gitops/configs/demo-app-values/default.yaml
 ---
 # Per-environment values. Each Warehouse feeds only its own Stage, so this
 # Freight is never promoted to another environment.
@@ -41,7 +41,7 @@ spec:
         branch: main
         commitSelectionStrategy: NewestFromBranch
         includePaths:
-          - gitops/configs/demo/app-values/dev.yaml
+          - gitops/configs/demo-app-values/dev.yaml
 ---
 apiVersion: kargo.akuity.io/v1alpha1
 kind: Warehouse
@@ -57,7 +57,7 @@ spec:
         branch: main
         commitSelectionStrategy: NewestFromBranch
         includePaths:
-          - gitops/configs/demo/app-values/staging.yaml
+          - gitops/configs/demo-app-values/staging.yaml
 ---
 apiVersion: kargo.akuity.io/v1alpha1
 kind: Warehouse
@@ -73,4 +73,4 @@ spec:
         branch: main
         commitSelectionStrategy: NewestFromBranch
         includePaths:
-          - gitops/configs/demo/app-values/prod.yaml
+          - gitops/configs/demo-app-values/prod.yaml

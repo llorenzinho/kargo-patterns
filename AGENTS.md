@@ -9,7 +9,7 @@ Only repo-specific, easy-to-get-wrong facts belong here.
 |---|---|
 | `app/` | Go module `github.com/llorenzinho/kargo-pattern/app`. Standard library only. |
 | `chart/` | Helm chart, published as an OCI artifact. |
-| `gitops/configs/` | ArgoCD install, app-of-apps root, Kargo install, stage `ApplicationSet`, app configuration in `demo/app-values/` (watched by Warehouses, not applied). |
+| `gitops/configs/` | ArgoCD install, app-of-apps root, Kargo install, stage `ApplicationSet`, app configuration in `demo-app-values/` (watched by Warehouses, not applied). |
 | `gitops/kargo/` | Kargo pipeline only (Project `release-train`). App configuration does not belong here. |
 | `hack/kind-config.yaml` | Local kind cluster definition. |
 | `.github/workflows/` | CI and release pipelines. |

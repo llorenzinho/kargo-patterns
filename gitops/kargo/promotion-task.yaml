@@ -26,7 +26,7 @@ spec:
     - name: chartRepo
       value: oci://ghcr.io/llorenzinho/charts/kargo-pattern
     - name: valuesDir
-      value: gitops/configs/values
+      value: gitops/configs/demo-app-values
     - name: valuesWarehouse
       value: values-${{ ctx.stage }}
     - name: targetBranch
@@ -75,7 +75,7 @@ spec:
         namespace: ${{ ctx.stage }}
         valuesFiles:
           - ./base/${{ vars.valuesDir }}/default.yaml
-          - ./demo/app-values/${{ vars.valuesDir }}/${{ ctx.stage }}.yaml
+          - ./values/${{ vars.valuesDir }}/${{ ctx.stage }}.yaml
         setValues:
           - key: image.tag
             value: ${{ imageFrom(vars.imageRepo).Tag }}
