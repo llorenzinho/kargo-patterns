@@ -10,11 +10,9 @@ The repository contains:
 
 - `app/`: a small Go HTTP service with structured JSON logs
 - `chart/`: a Helm chart for the service
-- `gitops/cluster/`: ArgoCD installation and the ApplicationSet that deploys the
-  service to the `dev`, `staging` and `prod` namespaces
-- `gitops/kargo/`: scaffold for the Kargo promotion pattern
-
-Kargo is not implemented yet.
+- `gitops/configs/`: ArgoCD installation and everything ArgoCD deploys, including
+  Kargo and the ApplicationSet for the `dev`, `staging` and `prod` namespaces
+- `gitops/kargo/`: the Kargo release-train pipeline
 
 ## Service
 
@@ -131,7 +129,8 @@ helm install kargo-pattern ./chart \
 
 - `ci.yml`: pre-commit, Go checks, Helm lint/template and image build
 - `release-please.yml`: release PRs and tags for `app` and `chart`
-- `image.yml`: builds and pushes `ghcr.io/<owner>/kargo-patterns`
+- `image.yml`: builds and pushes `ghcr.io/<owner>/kargo-patterns` only for
+  release tags (`v*`) or when called by `release-please.yml`
 - `chart-publish.yml`: packages the chart, pushes it to
   `oci://ghcr.io/<owner>/charts` and attaches the `.tgz` to the GitHub release
 
@@ -158,34 +157,42 @@ repository secret.
 
 ## GitOps
 
-ArgoCD deploys one Application per stage with an `ApplicationSet`. Each one reads
-rendered manifests from its `deploy/app/<stage>` branch:
+Kargo promotes released artifacts through a release train of five Stages, and
+ArgoCD deploys what each promotion commits:
 
-| Application | Branch | Namespace |
-|---|---|---|
-| `kargo-pattern-dev` | `deploy/app/dev` | `dev` |
-| `kargo-pattern-staging` | `deploy/app/staging` | `staging` |
-| `kargo-pattern-prod` | `deploy/app/prod` | `prod` |
-
-Install ArgoCD on the current cluster and start the app-of-apps. ArgoCD reads
-from GitHub, so `gitops/cluster/` must be on `origin/main` first:
-
-```sh
-task argocd:install
-task argocd:bootstrap
+```
+dev -> staging-gate -> staging -> prod-gate -> prod
 ```
 
-The UI is at <http://argocd.localhost:8080> once ingress-nginx is installed. Log
-in as `admin` with the password from `task argocd:password`. `task e2e` does not
-install ArgoCD.
+Promotion to `dev` and to both gates is automatic; promotion to `staging` and `prod`
+is manual. Each promotion pushes the rendered chart and a manifest of the deployed
+artifacts to a dedicated branch:
 
-Kargo will create the `deploy/app/<stage>` branches. Until then the stage
-Applications report a `ComparisonError` because the revision does not exist. See
-[`gitops/cluster/README.md`](gitops/cluster/README.md).
+| Application | Branch | Namespace | URL |
+|---|---|---|---|
+| `kargo-pattern-dev` | `deploy/app/dev` | `dev` | <http://kargo-pattern-dev.localhost:8080> |
+| `kargo-pattern-staging` | `deploy/app/staging` | `staging` | <http://kargo-pattern-staging.localhost:8080> |
+| `kargo-pattern-prod` | `deploy/app/prod` | `prod` | <http://kargo-pattern-prod.localhost:8080> |
 
-### Roadmap
+### Run the whole solution
 
-`gitops/kargo/` will hold the Kargo Project, Warehouse, Stages and PromotionTasks.
-The Warehouse will watch the image repository, and each Stage will promote the
-image tag by committing rendered manifests to its branch. See
-[`gitops/kargo/README.md`](gitops/kargo/README.md).
+Prerequisites:
+
+- `gitops/` is on `origin/main`: ArgoCD and Kargo read from GitHub, not from your
+  working tree.
+- At least one release of the app and of the chart exists, and both GHCR packages
+  are public. Without releases, the `app` Warehouse produces no Freight.
+- `.env` sets `KARGO_GIT_USERNAME` and `KARGO_GIT_TOKEN`. Kargo pushes the
+  `deploy/app/*` branches with this token: use a fine-grained token with **Contents:
+  read and write** on this repository only.
+
+```sh
+task up
+```
+
+The task creates the kind cluster, installs ingress-nginx and ArgoCD, lets ArgoCD
+install everything else, and prints the URLs and credentials of ArgoCD and Kargo. To
+print them again, run `task up:info`. `task e2e` does not install ArgoCD or Kargo.
+
+See [`gitops/configs/README.md`](gitops/configs/README.md) for the installation and
+[`gitops/kargo/README.md`](gitops/kargo/README.md) for the pipeline and how to promote.

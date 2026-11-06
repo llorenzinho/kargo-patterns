@@ -1,0 +1,25 @@
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Project
+metadata:
+  name: release-train
+---
+apiVersion: kargo.akuity.io/v1alpha1
+kind: ProjectConfig
+metadata:
+  name: release-train
+  namespace: release-train
+spec:
+  # Kargo enables auto-promotion per Stage, not per Freight request. All three
+  # Stages need it for their values-<stage> Warehouse. The app Freight stays
+  # manual on staging and prod through the MatchUpstream policy in stages.yaml.
+  # The gates are control flow Stages and need no policy.
+  promotionPolicies:
+    - stageSelector:
+        name: dev
+      autoPromotionEnabled: true
+    - stageSelector:
+        name: staging
+      autoPromotionEnabled: true
+    - stageSelector:
+        name: prod
+      autoPromotionEnabled: true

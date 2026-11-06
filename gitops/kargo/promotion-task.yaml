@@ -1,0 +1,131 @@
+# Renders the released chart for one Stage and pushes the result, with a manifest
+# of the Freight behind it, to deploy/app/<stage>:
+#
+#   manifests/     rendered chart, installed by the ArgoCD Application
+#   freight.yaml   artifacts currently deployed to the Stage, read by people only
+#
+# Every step runs only when both Freight requests of the Stage are filled. Kargo
+# does not retry a failed auto-promotion, so a promotion with an empty request must
+# succeed without rendering rather than fail: the first Freight fills its request,
+# the second one renders.
+#
+# The guard is on each step because Kargo forbids "if" on a step that references a
+# task. It includes success() because an explicit "if" replaces the default
+# behavior of skipping a step after a failure.
+apiVersion: kargo.akuity.io/v1alpha1
+kind: PromotionTask
+metadata:
+  name: render-and-push
+  namespace: release-train
+spec:
+  vars:
+    - name: gitRepo
+      value: https://github.com/llorenzinho/kargo-patterns.git
+    - name: imageRepo
+      value: ghcr.io/llorenzinho/kargo-patterns
+    - name: chartRepo
+      value: oci://ghcr.io/llorenzinho/charts/kargo-pattern
+    - name: valuesDir
+      value: gitops/configs/values
+    - name: valuesWarehouse
+      value: values-${{ ctx.stage }}
+    - name: targetBranch
+      value: deploy/app/${{ ctx.stage }}
+    - name: ready
+      value: >-
+        ${{ imageFrom(vars.imageRepo) != nil &&
+        commitFrom(vars.gitRepo, warehouse(vars.valuesWarehouse)) != nil }}
+  steps:
+    # Both values files are read from the commit pinned in their Freight, not from
+    # the tip of main.
+    - uses: git-clone
+      if: ${{ success() && vars.ready }}
+      config:
+        repoURL: ${{ vars.gitRepo }}
+        checkout:
+          - commit: ${{ commitFrom(vars.gitRepo, warehouse('app')).ID }}
+            path: ./base
+          - commit: ${{ commitFrom(vars.gitRepo, warehouse(vars.valuesWarehouse)).ID }}
+            path: ./values
+          - branch: ${{ vars.targetBranch }}
+            create: true
+            path: ./out
+    - uses: git-clear
+      if: ${{ success() && vars.ready }}
+      config:
+        path: ./out
+    - uses: oci-download
+      if: ${{ success() && vars.ready }}
+      config:
+        imageRef: ${{ vars.chartRepo }}:${{ chartFrom(vars.chartRepo).Version }}
+        mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+        outPath: ./chart.tgz
+    - uses: untar
+      if: ${{ success() && vars.ready }}
+      config:
+        inPath: ./chart.tgz
+        outPath: ./chart
+        stripComponents: 1
+    # Precedence, lowest first: chart defaults, default.yaml, <stage>.yaml, image tag.
+    - uses: helm-template
+      if: ${{ success() && vars.ready }}
+      config:
+        path: ./chart
+        releaseName: kargo-pattern
+        namespace: ${{ ctx.stage }}
+        valuesFiles:
+          - ./base/${{ vars.valuesDir }}/default.yaml
+          - ./demo/app-values/${{ vars.valuesDir }}/${{ ctx.stage }}.yaml
+        setValues:
+          - key: image.tag
+            value: ${{ imageFrom(vars.imageRepo).Tag }}
+        outPath: ./out/manifests
+        outLayout: flat
+    - uses: file-write
+      if: ${{ success() && vars.ready }}
+      config:
+        path: ./out/freight.yaml
+        overwrite: true
+        permissions: "0644"
+        contents: |
+          stage: ${{ ctx.stage }}
+          promotion: ${{ ctx.promotion }}
+          actor: ${{ ctx.meta.promotion.actor }}
+          targetFreight:
+            name: ${{ ctx.targetFreight.name }}
+            origin: ${{ ctx.targetFreight.origin.name }}
+          app:
+            image:
+              repository: ${{ vars.imageRepo }}
+              tag: ${{ imageFrom(vars.imageRepo).Tag }}
+              digest: ${{ imageFrom(vars.imageRepo).Digest }}
+            chart:
+              repository: ${{ vars.chartRepo }}
+              version: ${{ chartFrom(vars.chartRepo).Version }}
+            defaults:
+              path: ${{ vars.valuesDir }}/default.yaml
+              commit: ${{ commitFrom(vars.gitRepo, warehouse('app')).ID }}
+          values:
+            path: ${{ vars.valuesDir }}/${{ ctx.stage }}.yaml
+            commit: ${{ commitFrom(vars.gitRepo, warehouse(vars.valuesWarehouse)).ID }}
+    - uses: git-commit
+      as: commit
+      if: ${{ success() && vars.ready }}
+      config:
+        path: ./out
+        message: >-
+          chore(${{ ctx.stage }}): deploy ${{ imageFrom(vars.imageRepo).Tag }},
+          chart ${{ chartFrom(vars.chartRepo).Version }}
+    - uses: git-push
+      if: ${{ success() && vars.ready }}
+      config:
+        path: ./out
+        targetBranch: ${{ vars.targetBranch }}
+    - uses: argocd-update
+      if: ${{ success() && vars.ready }}
+      config:
+        apps:
+          - name: kargo-pattern-${{ ctx.stage }}
+            sources:
+              - repoURL: ${{ vars.gitRepo }}
+                desiredRevision: ${{ task.outputs.commit.commit }}

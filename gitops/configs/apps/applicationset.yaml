@@ -1,5 +1,6 @@
 # One Application per stage. Each one deploys the rendered manifests that Kargo
-# commits to the root of the deploy/app/<stage> branch.
+# commits to manifests/ on the deploy/app/<stage> branch. The branch root also
+# holds freight.yaml, which is not a Kubernetes manifest.
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -22,18 +23,21 @@ spec:
       name: "kargo-pattern-{{ .stage }}"
       labels:
         stage: "{{ .stage }}"
+      annotations:
+        # Must be set here: the controller overwrites generated Applications.
+        kargo.akuity.io/authorized-stage: "release-train:{{ .stage }}"
     spec:
       project: kargo-pattern
       source:
         repoURL: https://github.com/llorenzinho/kargo-patterns.git
         targetRevision: "deploy/app/{{ .stage }}"
-        path: .
+        path: manifests
       destination:
         server: https://kubernetes.default.svc
         namespace: "{{ .stage }}"
       syncPolicy:
         # Auto-sync on every stage, prod included: these branches change only
-        # through a Kargo promotion, so the prod gate belongs to the Kargo Stage.
+        # through a Kargo promotion, so the prod gate belongs to Kargo.
         automated:
           prune: true
           selfHeal: true

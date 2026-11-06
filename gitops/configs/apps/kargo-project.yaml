@@ -1,0 +1,36 @@
+# The Kargo pipeline itself: Project, Warehouses, Stages and PromotionTask.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kargo-project
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/llorenzinho/kargo-patterns.git
+    targetRevision: main
+    path: gitops/kargo
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: release-train
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    # The namespace must exist before the sync dry run of the namespaced
+    # resources. Kargo adopts a pre-existing namespace only with this label.
+    managedNamespaceMetadata:
+      labels:
+        kargo.akuity.io/project: "true"
+    syncOptions:
+      - CreateNamespace=true
+      # The Kargo CRDs may not exist yet.
+      - SkipDryRunOnMissingResource=true
+    # ArgoCD does not wait for the health of sibling Applications: retry until
+    # Kargo and its webhooks are ready.
+    retry:
+      limit: 20
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 3m

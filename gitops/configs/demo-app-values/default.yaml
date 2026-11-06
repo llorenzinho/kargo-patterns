@@ -1,0 +1,3 @@
+# Default configuration, promoted with the image and the chart in the app Freight.
+env:
+  LOG_LEVEL: info
