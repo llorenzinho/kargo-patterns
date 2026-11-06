@@ -18,7 +18,7 @@ From the repository:
 
 ```sh
 helm install kargo-pattern ./chart \
-  --set image.repository=ghcr.io/llorenzinho/kargo-pattern \
+  --set image.repository=ghcr.io/llorenzinho/kargo-patterns \
   --set image.tag=v0.1.0
 ```
 
@@ -27,7 +27,7 @@ helm install kargo-pattern ./chart \
 | Key | Default | Description |
 |---|---|---|
 | `replicaCount` | `1` | Number of replicas |
-| `image.repository` | `ghcr.io/llorenzinho/kargo-pattern` | Container image |
+| `image.repository` | `ghcr.io/llorenzinho/kargo-patterns` | Container image |
 | `image.tag` | `Chart.AppVersion` | Image tag |
 | `serviceAccount.create` | `true` | Create a dedicated ServiceAccount |
 | `service.port` | `80` | Service port |

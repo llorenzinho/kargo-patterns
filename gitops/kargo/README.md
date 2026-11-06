@@ -6,7 +6,7 @@ Scaffold only. This directory will contain the Kargo promotion pattern for the
 Planned resources:
 
 - `Project` for the service and its stages
-- `Warehouse` watching the `ghcr.io/<owner>/kargo-pattern` image repository
+- `Warehouse` watching the `ghcr.io/<owner>/kargo-patterns` image repository
 - `Stage` definitions (for example `dev`, `staging`, `prod`)
 - `PromotionTask` resources for updating the GitOps desired state
 - `Freight` promotion rules and verification steps

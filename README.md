@@ -3,6 +3,9 @@
 Showcase repository for a Kubernetes promotion pipeline built with
 [Kargo](https://kargo.akuity.io/) and ArgoCD.
 
+The GitHub repository is `llorenzinho/kargo-patterns` (plural); the service,
+chart and local cluster keep the `kargo-pattern` project name.
+
 The repository contains:
 
 - `app/`: a small Go HTTP service with structured JSON logs
@@ -119,7 +122,7 @@ From the repository:
 
 ```sh
 helm install kargo-pattern ./chart \
-  --set image.repository=ghcr.io/llorenzinho/kargo-pattern \
+  --set image.repository=ghcr.io/llorenzinho/kargo-patterns \
   --set image.tag=v0.1.0
 ```
 
@@ -127,7 +130,7 @@ helm install kargo-pattern ./chart \
 
 - `ci.yml`: pre-commit, Go checks, Helm lint/template and image build
 - `release-please.yml`: release PRs and tags for `app` and `chart`
-- `image.yml`: builds and pushes `ghcr.io/<owner>/kargo-pattern`
+- `image.yml`: builds and pushes `ghcr.io/<owner>/kargo-patterns`
 - `chart-publish.yml`: packages the chart, pushes it to
   `oci://ghcr.io/<owner>/charts` and attaches the `.tgz` to the GitHub release
 
@@ -135,7 +138,7 @@ The app and chart are released independently by release-please:
 
 | Path changed | Release tag | Artifact |
 |---|---|---|
-| `app/` | `vX.Y.Z` | `ghcr.io/<owner>/kargo-pattern:vX.Y.Z` |
+| `app/` | `vX.Y.Z` | `ghcr.io/<owner>/kargo-patterns:vX.Y.Z` |
 | `chart/` | `chart-vX.Y.Z` | `oci://ghcr.io/<owner>/charts/kargo-pattern:X.Y.Z` |
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org/).

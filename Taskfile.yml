@@ -3,7 +3,7 @@ version: "3"
 vars:
   APP_DIR: app
   CHART_DIR: chart
-  IMAGE_REPO: ghcr.io/llorenzinho/kargo-pattern
+  IMAGE_REPO: ghcr.io/llorenzinho/kargo-patterns
   IMAGE_TAG: dev
   CLUSTER_NAME: kargo-pattern
   K8S_NAMESPACE: kargo-pattern
