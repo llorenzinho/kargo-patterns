@@ -1,0 +1,22 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "separate-pull-requests": true,
+  "packages": {
+    "app": {
+      "release-type": "go",
+      "component": "app",
+      "include-component-in-tag": false,
+      "extra-files": [
+        {
+          "type": "generic",
+          "path": "internal/version/version.go"
+        }
+      ]
+    },
+    "chart": {
+      "release-type": "helm",
+      "component": "chart",
+      "include-component-in-tag": true
+    }
+  }
+}
