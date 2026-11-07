@@ -1,0 +1,20 @@
+stage: staging
+promotion: staging.01m6trq4vka5n5rtgb0sw5jexw.c2723e7
+actor: admin
+targetFreight:
+  name: c2723e705116d7a22847d5082f61e8878fbae631
+  origin: app
+app:
+  image:
+    repository: ghcr.io/llorenzinho/kargo-patterns
+    tag: v0.2.0
+    digest: sha256:f748b1af63fcc93eaa1d7795dcf7ebc32cdef7607163114d56b31dc6249e2072
+  chart:
+    repository: oci://ghcr.io/llorenzinho/charts/kargo-pattern
+    version: 0.2.0
+  defaults:
+    path: gitops/configs/demo-app-values/default.yaml
+    commit: f9e9f8d5ecc9bae79600c95425ce4e483187b6b3
+values:
+  path: gitops/configs/demo-app-values/staging.yaml
+  commit: f9e9f8d5ecc9bae79600c95425ce4e483187b6b3
