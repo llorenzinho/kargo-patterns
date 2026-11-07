@@ -1,0 +1,24 @@
+# Source: kargo-pattern/templates/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kargo-pattern
+  labels:
+    helm.sh/chart: kargo-pattern-0.2.0
+    app.kubernetes.io/name: kargo-pattern
+    app.kubernetes.io/instance: kargo-pattern
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: "kargo-pattern-dev.localhost"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kargo-pattern
+                port:
+                  name: http
