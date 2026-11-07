@@ -29,6 +29,8 @@ spec:
       value: gitops/configs/demo-app-values
     - name: valuesWarehouse
       value: values-${{ ctx.stage }}
+    - name: kubeVersion
+      value: "1.37.0"
     - name: targetBranch
       value: deploy/app/${{ ctx.stage }}
     - name: ready
@@ -73,6 +75,9 @@ spec:
         path: ./chart
         releaseName: kargo-pattern
         namespace: ${{ ctx.stage }}
+        # Without a cluster to ask, Helm assumes Kubernetes v1.20.0 and the chart
+        # (kubeVersion >=1.27) refuses to render. Match the target cluster.
+        kubeVersion: ${{ vars.kubeVersion }}
         valuesFiles:
           - ./base/${{ vars.valuesDir }}/default.yaml
           - ./values/${{ vars.valuesDir }}/${{ ctx.stage }}.yaml
