@@ -142,14 +142,30 @@ $ curl http://kargo-pattern-prod.localhost:8080/version
 
 ## Try it
 
-You need Docker, [mise](https://mise.jdx.dev/), a fork of this repository, and at least
-one release of the app and the chart published as public GHCR packages.
+You need Docker, [mise](https://mise.jdx.dev/) and host port `8080` free. You do not
+need to build or release anything: the image and the chart come from the public
+packages of this repository.
 
-```sh
-mise trust && task setup
-# .env: KARGO_GIT_USERNAME and KARGO_GIT_TOKEN, a token that can push to your fork
-task up
-```
+Use a fork, not a plain clone. Kargo pushes the rendered manifests to the
+`deploy/app/*` branches of the repository named in the manifests, so it needs a
+repository you can write to.
+
+1. Fork this repository and clone your fork.
+2. Point the manifests at your fork. The image and chart references on `ghcr.io` stay
+   as they are. On macOS, use `sed -i ''`.
+
+   ```sh
+   grep -rl 'github.com/llorenzinho/kargo-patterns' gitops Taskfile.yml \
+     | xargs sed -i 's#github.com/llorenzinho/kargo-patterns#github.com/<your-user>/kargo-patterns#g'
+   ```
+
+3. Commit and push to `main`. ArgoCD and Kargo read from GitHub, not from your working
+   tree, and `task up` refuses to start until `gitops/kargo` is on `origin/main`.
+4. Run `mise trust && task setup`.
+5. In `.env`, set `KARGO_GIT_USERNAME` and `KARGO_GIT_TOKEN`. The token must be able to
+   push to your fork: a fine-grained token with **Contents: Read and write** on the fork,
+   or a classic token with `public_repo`.
+6. Run `task up`.
 
 `task up` creates the kind cluster, installs ingress-nginx and ArgoCD, lets ArgoCD
 install everything else and prints the URLs and credentials:
@@ -160,15 +176,21 @@ install everything else and prints the URLs and credentials:
 | Kargo | <http://kargo.localhost:8080> |
 | dev / staging / prod | <http://kargo-pattern-dev.localhost:8080>, `-staging`, `-prod` |
 
-Then promote a release train from a gate:
+Within a few minutes, the latest release reaches `dev` on its own and `staging-gate`
+collects it. To promote it, open the Kargo UI, open the menu of `staging-gate`, choose
+**Promote to downstream** and select the Freight. Then do the same from `prod-gate`.
+
+From the CLI:
 
 ```sh
 kargo login http://kargo.localhost:8080 --admin   # password: task kargo:password
+kargo get freight --project release-train
 kargo promote --project release-train --freight-alias <alias> --downstream-from staging-gate
+kargo promote --project release-train --freight-alias <alias> --downstream-from prod-gate
 ```
 
-ArgoCD and Kargo read from GitHub, not from your working tree: push `gitops/` before
-running `task up`. Remove everything with `task cluster:delete`.
+Remove everything with `task cluster:delete`. The `deploy/app/*` branches stay on your
+fork.
 
 More detail: [`gitops/configs/README.md`](gitops/configs/README.md) covers the
 installation, and [`gitops/kargo/README.md`](gitops/kargo/README.md) covers the
